@@ -1,0 +1,27 @@
+.gvn-abilities-table {
+	table-layout: fixed;
+}
+
+.gvn-abilities-table th:first-child {
+	width: 60%;
+}
+
+.gvn-abilities-table th,
+.gvn-abilities-table td,
+.gvn-abilities-table code {
+	overflow-wrap: anywhere;
+}
+
+.gvn-abilities-table tbody th {
+	font-weight: normal;
+}
+
+.gvn-abilities-table td {
+	vertical-align: middle;
+}
+
+@media (max-width: 600px) {
+	.gvn-abilities-table th:first-child {
+		width: 50%;
+	}
+}

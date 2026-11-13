@@ -2,11 +2,12 @@
 /**
  * Plugin Name: GVN WordPress Abilities
  * Description: Expõe apenas a estrutura das tabelas WordPress ao MCP, sem ler registros nem executar SQL informado pelo usuário.
- * Version: 1.1.0
+ * Version: 1.2.1
  * Author: Giovani
  * Author URI: https://projetoalfa.org
  * Requires at least: 6.9
  * Requires PHP: 7.4
+ * Requires Plugins: mcp-adapter
  * Text Domain: gvn-wordpress-abilities
  */
 
@@ -74,46 +75,68 @@ function gvn_wordpress_abilities_describe( $input ) {
 	);
 }
 
+/**
+ * Whether the current user may manage or execute abilities.
+ *
+ * @return bool Access granted.
+ */
+function gvn_wordpress_abilities_can_manage() {
+	return current_user_can( 'manage_options' ) && ( ! is_multisite() || is_super_admin() );
+}
+
+/**
+ * Catalog shared by registration and admin, including disabled abilities.
+ *
+ * @return array Ability definitions.
+ */
+function gvn_wordpress_abilities_catalog() {
+	return array(
+		'gvn-wordpress-abilities/list-tables' => array(
+			'label'            => __( 'Listar tabelas do site', 'gvn-wordpress-abilities' ),
+			'description'      => __( 'Lista nomes de tabelas do prefixo do site atual, sem consultar registros.', 'gvn-wordpress-abilities' ),
+			'input_schema'     => array( 'type' => 'object', 'properties' => new stdClass() ),
+			'execute_callback' => 'gvn_wordpress_abilities_tables',
+		),
+		'gvn-wordpress-abilities/describe-table' => array(
+			'label'            => __( 'Descrever tabela do site', 'gvn-wordpress-abilities' ),
+			'description'      => __( 'Retorna colunas e índices de uma tabela do site, sem consultar registros.', 'gvn-wordpress-abilities' ),
+			'input_schema'     => array(
+				'type'       => 'object',
+				'properties' => array( 'table' => array( 'type' => 'string', 'description' => __( 'Nome exato da tabela.', 'gvn-wordpress-abilities' ) ) ),
+				'required'   => array( 'table' ),
+			),
+			'execute_callback' => 'gvn_wordpress_abilities_describe',
+		),
+	);
+}
+
+/**
+ * Retrieve disabled names; an absent option preserves the original behavior.
+ *
+ * @return array Disabled ability names.
+ */
+function gvn_wordpress_abilities_disabled() {
+	return (array) get_option( 'gvn_wordpress_abilities_disabled', array() );
+}
+
 add_action(
 	'wp_abilities_api_init',
 	static function () {
 		$common = array(
 			'category'            => 'site',
-			'permission_callback' => static function () {
-				return current_user_can( 'manage_options' ) && ( ! is_multisite() || is_super_admin() );
-			},
+			'permission_callback' => 'gvn_wordpress_abilities_can_manage',
 			'meta'                => array(
 				'mcp'         => array( 'public' => true ),
 				'annotations' => array( 'readonly' => true, 'destructive' => false, 'idempotent' => true ),
 			),
 		);
-		wp_register_ability(
-			'gvn-wordpress-abilities/list-tables',
-			array_merge(
-				$common,
-				array(
-					'label'            => 'Listar tabelas do site',
-					'description'      => 'Lista nomes de tabelas do prefixo do site atual, sem consultar registros.',
-					'input_schema'     => array( 'type' => 'object', 'properties' => new stdClass() ),
-					'execute_callback' => 'gvn_wordpress_abilities_tables',
-				)
-			)
-		);
-		wp_register_ability(
-			'gvn-wordpress-abilities/describe-table',
-			array_merge(
-				$common,
-				array(
-					'label'            => 'Descrever tabela do site',
-					'description'      => 'Retorna colunas e índices de uma tabela do site, sem consultar registros.',
-					'input_schema'     => array(
-						'type'       => 'object',
-						'properties' => array( 'table' => array( 'type' => 'string', 'description' => 'Nome exato da tabela.' ) ),
-						'required'   => array( 'table' ),
-					),
-					'execute_callback' => 'gvn_wordpress_abilities_describe',
-				)
-			)
-		);
+		$disabled = gvn_wordpress_abilities_disabled();
+		foreach ( gvn_wordpress_abilities_catalog() as $name => $args ) {
+			if ( ! in_array( $name, $disabled, true ) ) {
+				wp_register_ability( $name, array_merge( $common, $args ) );
+			}
+		}
 	}
 );
+
+require_once __DIR__ . '/admin.php';
