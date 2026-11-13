@@ -11,7 +11,7 @@ add_action(
 	'admin_enqueue_scripts',
 	static function ( $hook ) {
 		if ( 'settings_page_gvn-wordpress-abilities' === $hook ) {
-			wp_enqueue_style( 'gvn-wordpress-abilities-admin', plugins_url( 'admin.css', __FILE__ ), array(), '1.4.1' );
+			wp_enqueue_style( 'gvn-wordpress-abilities-admin', plugins_url( 'admin.css', __FILE__ ), array(), '1.5.0' );
 		}
 	}
 );

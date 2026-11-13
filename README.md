@@ -6,7 +6,7 @@ Plugin de Giovani — https://projetoalfa.org.
 
 Instale e ative o **[MCP Adapter](https://wordpress.org/plugins/mcp-adapter/), por WordPress.org**, antes de ativar o GVN WordPress Abilities. A dependência está declarada no cabeçalho do plugin (`Requires Plugins: mcp-adapter`), permitindo que o WordPress bloqueie a ativação enquanto o MCP Adapter não estiver instalado e ativo.
 
-Adiciona abilities para uso com o MCP Adapter. Permite listar tabelas do prefixo do site, consultar colunas e índices, ler arquivos de plugins instalados e gerenciar páginas HTMLPress. Não executa consultas arbitrárias nem edita arquivos. Exige WordPress 6.9+, PHP 7.4+ e MCP Adapter; a integração HTMLPress exige os requisitos do próprio HTMLPress (PHP 8.1+ na versão 1.3.1).
+Adiciona abilities para uso com o MCP Adapter. Permite listar tabelas do prefixo do site, consultar colunas e índices, ler arquivos de plugins instalados e gerenciar páginas HTMLPress. Não executa consultas SQL arbitrárias nem edita arquivos; páginas PHP publicadas pelo HTMLPress executam código no servidor. Exige WordPress 6.9+, PHP 7.4+ e MCP Adapter; a integração HTMLPress exige os requisitos do próprio HTMLPress (PHP 8.1+).
 
 O acesso é restrito a administradores; em multisite, a superadministradores. Nomes e estruturas das tabelas são enviados ao cliente que executar as abilities.
 
@@ -40,12 +40,13 @@ Sem `file`, lê o arquivo principal. Retorna `plugin`, `file`, `offset`, `bytes`
 
 ## Compatibilidade HTMLPress
 
-`gvn-wordpress-abilities/manage-htmlpress` integra a API pública do **HTMLPress 1.3.1** instalado neste projeto (`HTMLPress::save_group`), não o plugin homônimo do WordPress.org. Sem a API compatível, a execução é bloqueada; as demais habilidades continuam funcionando.
+`gvn-wordpress-abilities/manage-htmlpress` integra a API pública do **HTMLPress** (`HTMLPress::save_group`), não o plugin homônimo do WordPress.org. HTML mantém compatibilidade com a API 1.3.1; publicar PHP exige a API 1.4.1. Sem a API compatível, a operação é bloqueada; as demais habilidades continuam funcionando.
 
-- Listar: `{"action":"list","page":1}`. Retorna até 20 páginas (uma por idioma) e `next_page`; repita enquanto não for `null`. Não inclui lixeira.
-- Ler: `{"action":"read","id":123}`. Qualquer ID do grupo serve. Retorna `pages`, o HTML original em `documents` e `revision`.
+- Listar: `{"action":"list","page":1}`. Retorna até 20 páginas (uma por idioma), cada uma com `type` (`html` ou `php`), e `next_page`; repita enquanto não for `null`. Não inclui lixeira.
+- Ler: `{"action":"read","id":123}`. Qualquer ID do grupo serve. Retorna `pages`, o código original em `documents`, os formatos por idioma em `types` e `revision`. A leitura não executa PHP.
 - Criar: envie `action=save`, `title`, `slug` e `documents.pt`. `documents.en` e `documents.es` são opcionais.
 - Editar: envie `action=save`, `id` e `expected_revision` igual à `revision` da leitura mais recente. Envie apenas os idiomas que deseja substituir. Título e slug omitidos são mantidos; quando enviados, afetam todo o grupo.
+- Formatos: `types` aceita `html` ou `php` somente para idiomas enviados em `documents`. Omitir preserva o formato existente na edição; páginas antigas sem formato e novos idiomas usam `html`. Para converter um idioma, envie seu código completo e o formato desejado. Grupos podem misturar HTML e PHP.
 
 Exemplo de criação:
 
@@ -73,8 +74,26 @@ Exemplo de edição (substitua `expected_revision` pelo hash real da leitura):
 }
 ```
 
-**Atenção:** novas páginas e novas traduções são publicadas imediatamente pelo HTMLPress; páginas existentes mantêm seu status. Não há criação como rascunho nesta API. O HTML completo, de até 2 MiB por idioma, é validado pelo HTMLPress sem remover scripts, CSS ou barras invertidas. Publique apenas código confiável. Exige `manage_options`, `unfiltered_html`, `edit_pages`, `publish_pages`, `upload_files` e permissão de edição de todas as páginas do grupo; em multisite, exige também superadministrador.
+Exemplo de criação PHP:
 
-A revisão detecta alterações anteriores à verificação, não é um bloqueio transacional contra gravações simultâneas pelo painel. Idiomas omitidos e assets já enviados são preservados. Esta habilidade não envia ZIP, não modifica arquivos/assets, não exclui traduções nem altera status. Em páginas com bundles, referências relativas continuam usando a base de assets do HTMLPress. Alterar o slug muda as URLs sem criar redirecionamentos.
+```json
+{
+  "action": "save",
+  "title": "Página dinâmica",
+  "slug": "pagina-dinamica",
+  "types": { "pt": "php" },
+  "documents": {
+    "pt": "<?php defined('ABSPATH') || exit; ?><!doctype html><html><head><meta charset=\"utf-8\"><?php wp_head(); ?></head><body><h1><?= esc_html(get_bloginfo('name')) ?></h1><?php wp_footer(); ?></body></html>"
+  }
+}
+```
+
+PHP roda com WordPress e plugins já carregados: não inclua `wp-load.php`. Use `$args['assets_url']` para assets existentes e `$args['page_url']` para formulários; `__DIR__` e `__FILE__` apontam para um arquivo temporário, não para o pacote. A página deve incluir os hooks necessários, sem duplicar `wp_head()`/`wp_footer()` quando usar cabeçalho e rodapé do tema. Não use PHP auxiliar nem `exit`/`die` no fluxo normal.
+
+**Atenção:** novas páginas e novas traduções são publicadas imediatamente pelo HTMLPress; páginas existentes mantêm seu status. Não há criação como rascunho nesta API. O código HTML/PHP, de até 2 MiB por idioma, é validado pelo HTMLPress sem remover scripts, CSS ou barras invertidas. Publique apenas código confiável. PHP não possui sandbox: executa com os privilégios do WordPress, incluindo acesso ao banco e aos arquivos. A validação de sintaxe não garante segurança nem funcionamento; formulários que alteram dados precisam de nonces, validação e permissões no próprio template.
+
+Exige `manage_options`, `unfiltered_html`, `edit_pages`, `publish_pages`, `upload_files` e permissão de edição de todas as páginas do grupo; em multisite, exige também superadministrador. Enviar PHP exige adicionalmente `edit_themes` e respeita `DISALLOW_FILE_EDIT` e `DISALLOW_FILE_MODS`. Esses bloqueios não desativam PHP já publicado; editar somente título/slug ou outros idiomas HTML não reenvia o PHP omitido.
+
+A revisão inclui os formatos e detecta alterações anteriores à verificação, não é um bloqueio transacional contra gravações simultâneas pelo painel. Após atualizar este plugin, faça nova leitura antes de editar. Idiomas omitidos e assets já enviados são preservados. Esta habilidade não envia ZIP, não modifica arquivos/assets, não exclui traduções nem altera status. Em páginas com bundles, referências relativas continuam usando a base de assets do HTMLPress. Alterar o slug muda as URLs sem criar redirecionamentos.
 
 Verificações locais, sem WordPress/banco: `php tests/admin-check.php`, `php tests/plugin-files-check.php` e `php tests/htmlpress-check.php`. O último usa um substituto da API HTMLPress para testar o contrato da integração; não substitui um teste em homologação com os plugins reais.

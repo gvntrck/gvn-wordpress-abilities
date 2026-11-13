@@ -2,7 +2,7 @@
 /**
  * Plugin Name: GVN WordPress Abilities
  * Description: Habilidades MCP para consultar estruturas, ler arquivos de plugins e gerenciar páginas HTMLPress.
- * Version: 1.4.1
+ * Version: 1.5.0
  * Author: Giovani
  * Author URI: https://projetoalfa.org
  * Requires at least: 6.9

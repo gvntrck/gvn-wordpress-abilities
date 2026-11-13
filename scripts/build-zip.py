@@ -20,6 +20,14 @@ FILES = (
     "htmlpress.php",
     "plugin-files.php",
     "README.md",
+    "plugin-update-checker/plugin-update-checker.php",
+    "plugin-update-checker/load-v6p0.php",
+    "plugin-update-checker/license.txt",
+) + tuple(
+    path.relative_to(ROOT).as_posix()
+    for directory in ("Puc", "vendor", "css", "js", "languages")
+    for path in sorted((ROOT / "plugin-update-checker" / directory).rglob("*"))
+    if path.is_file()
 )
 
 
@@ -49,6 +57,7 @@ def main():
             plugin_dir = staging / PLUGIN
             plugin_dir.mkdir()
             for name in FILES:
+                (plugin_dir / name).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / name, plugin_dir / name)
 
             archive = staging / ARCHIVE.name

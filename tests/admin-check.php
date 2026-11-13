@@ -51,6 +51,7 @@ function run_hook( $name ) {
 	}
 }
 
+require __DIR__ . '/update-checker-stub.php';
 require dirname( __DIR__ ) . '/gvn-wordpress-abilities.php';
 
 $names = array_keys( gvn_wordpress_abilities_catalog() );

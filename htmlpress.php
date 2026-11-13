@@ -15,7 +15,7 @@ defined( 'ABSPATH' ) || exit;
 function gvn_wordpress_abilities_htmlpress_definition() {
 	return array(
 		'label'               => __( 'Gerenciar páginas HTMLPress', 'gvn-wordpress-abilities' ),
-		'description'         => __( 'Compatibilidade com HTMLPress 1.3.1 (classe HTMLPress, não o homônimo do WordPress.org). action=list lista páginas; read lê um grupo e sua revision; save cria (id=0, title, slug e documents.pt obrigatórios) ou edita (id e expected_revision da leitura obrigatórios). Novas páginas/traduções são PUBLICADAS imediatamente; existentes mantêm status. Título e slug são compartilhados; idiomas omitidos e assets existentes são preservados. HTML completo de até 2 MiB por idioma, incluindo scripts: envie apenas conteúdo confiável. Não gerencia ZIP/assets, exclusão ou status.', 'gvn-wordpress-abilities' ),
+		'description'         => __( 'Integra HTMLPress (classe HTMLPress, não o homônimo do WordPress.org): HTML via API 1.3.1; PHP via API 1.4.1. action=list lista páginas com type; read lê código original, types e revision; save cria (id=0, title, slug e documents.pt obrigatórios) ou edita (id e expected_revision da leitura obrigatórios). types define html/php por idioma enviado; omitido preserva formato existente ou usa html em novos idiomas. Novas páginas/traduções são PUBLICADAS imediatamente; existentes mantêm status. Título e slug são compartilhados; idiomas omitidos e assets existentes são preservados. Até 2 MiB por idioma. PHP executa no servidor, sem sandbox, e exige permissões de edição de código do HTMLPress: envie apenas código confiável. WordPress já está carregado; não inclua wp-load.php. Não gerencia ZIP/assets, exclusão ou status.', 'gvn-wordpress-abilities' ),
 		'input_schema'        => array(
 			'type'                 => 'object',
 			'properties'           => array(
@@ -31,6 +31,16 @@ function gvn_wordpress_abilities_htmlpress_definition() {
 						'pt' => array( 'type' => 'string', 'maxLength' => 2097152 ),
 						'en' => array( 'type' => 'string', 'maxLength' => 2097152 ),
 						'es' => array( 'type' => 'string', 'maxLength' => 2097152 ),
+					),
+					'additionalProperties' => false,
+				),
+				'types'             => array(
+					'type'                 => 'object',
+					'description'          => __( 'Formato por idioma: html ou php. Informe apenas idiomas enviados em documents. Omitir preserva o formato existente; novos idiomas usam html. PHP exige HTMLPress com API 1.4.1.', 'gvn-wordpress-abilities' ),
+					'properties'           => array(
+						'pt' => array( 'type' => 'string', 'enum' => array( 'html', 'php' ) ),
+						'en' => array( 'type' => 'string', 'enum' => array( 'html', 'php' ) ),
+						'es' => array( 'type' => 'string', 'enum' => array( 'html', 'php' ) ),
 					),
 					'additionalProperties' => false,
 				),
@@ -83,6 +93,7 @@ function gvn_wordpress_abilities_htmlpress_page( $post ) {
 		'id'       => (int) $post->ID,
 		'title'    => $post->post_title,
 		'status'   => $post->post_status,
+		'type'     => defined( 'HTMLPress::TYPE' ) && 'php' === get_post_meta( $post->ID, HTMLPress::TYPE, true ) ? 'php' : 'html',
 		'language' => get_post_meta( $post->ID, HTMLPress::LANG, true ),
 		'group'    => get_post_meta( $post->ID, HTMLPress::GROUP, true ),
 		'slug'     => HTMLPress::public_slug( $post->ID ),
@@ -108,16 +119,19 @@ function gvn_wordpress_abilities_htmlpress_read( $id ) {
 	ksort( $group );
 	$pages     = array();
 	$documents = array();
+	$types     = array();
 	foreach ( $group as $language => $page ) {
 		if ( ! current_user_can( 'edit_post', $page->ID ) ) {
 			return new WP_Error( 'gvn_htmlpress_forbidden', __( 'Sem permissão para todas as traduções.', 'gvn-wordpress-abilities' ) );
 		}
 		$pages[ $language ]     = gvn_wordpress_abilities_htmlpress_page( $page );
 		$documents[ $language ] = (string) get_post_meta( $page->ID, HTMLPress::HTML, true );
+		$types[ $language ]     = $pages[ $language ]['type'];
 	}
 	return array(
 		'pages'     => $pages,
 		'documents' => $documents,
+		'types'     => $types,
 		'revision'  => hash( 'sha256', serialize( array( $pages, $documents ) ) ),
 	);
 }
@@ -178,19 +192,32 @@ function gvn_wordpress_abilities_manage_htmlpress( $input ) {
 	$title     = $input['title'] ?? ( $anchor['title'] ?? '' );
 	$slug      = $input['slug'] ?? ( $anchor['slug'] ?? '' );
 	$documents = $input['documents'] ?? array();
+	$types     = array_key_exists( 'types', $input ) ? $input['types'] : array();
 	if ( ! is_string( $title ) || ! is_string( $slug ) || '' === sanitize_text_field( $title ) || '' === sanitize_title( $slug )
 		|| ! is_array( $documents ) || array_diff( array_keys( $documents ), array( 'pt', 'en', 'es' ) )
 		|| ( ! $id && ! isset( $documents['pt'] ) ) ) {
 		return new WP_Error( 'gvn_htmlpress_invalid_input', __( 'Informe título, slug e documentos válidos; português é obrigatório na criação.', 'gvn-wordpress-abilities' ) );
 	}
-	foreach ( $documents as $html ) {
-		if ( ! is_string( $html ) || strlen( $html ) > 2097152 ) {
-			return new WP_Error( 'gvn_htmlpress_invalid_input', __( 'Cada documento deve ser texto HTML de até 2 MiB.', 'gvn-wordpress-abilities' ) );
+	if ( ! is_array( $types ) || array_diff_key( $types, $documents ) ) {
+		return new WP_Error( 'gvn_htmlpress_invalid_input', __( 'Informe formatos somente para os idiomas enviados em documents.', 'gvn-wordpress-abilities' ) );
+	}
+	foreach ( $types as $type ) {
+		if ( ! in_array( $type, array( 'html', 'php' ), true ) ) {
+			return new WP_Error( 'gvn_htmlpress_invalid_input', __( 'Cada formato deve ser html ou php.', 'gvn-wordpress-abilities' ) );
 		}
+	}
+	foreach ( $documents as $language => $html ) {
+		if ( ! is_string( $html ) || strlen( $html ) > 2097152 ) {
+			return new WP_Error( 'gvn_htmlpress_invalid_input', __( 'Cada documento deve ser código HTML ou PHP de até 2 MiB.', 'gvn-wordpress-abilities' ) );
+		}
+		$types[ $language ] = $types[ $language ] ?? ( $current['types'][ $language ] ?? 'html' );
+	}
+	if ( in_array( 'php', $types, true ) && ( ! defined( 'HTMLPress::TYPE' ) || ! is_callable( array( 'HTMLPress', 'can_upload_php' ) ) ) ) {
+		return new WP_Error( 'gvn_htmlpress_php_unavailable', __( 'PHP exige uma versão compatível do HTMLPress (API da versão 1.4.1).', 'gvn-wordpress-abilities' ) );
 	}
 	// HTMLPress validates full HTML, preserves omitted languages and rolls back failures.
 	// Keep existing asset bundles: this operation edits HTML only, not uploaded files.
-	$result = HTMLPress::save_group( $id, $title, $slug, $documents );
+	$result = HTMLPress::save_group( $id, $title, $slug, $documents, null, $types );
 	if ( is_wp_error( $result ) ) {
 		return $result;
 	}

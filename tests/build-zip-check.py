@@ -14,6 +14,13 @@ spec = importlib.util.spec_from_file_location(
 build = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build)
 
+assert {
+    "plugin-update-checker/plugin-update-checker.php",
+    "plugin-update-checker/load-v6p0.php",
+    "plugin-update-checker/Puc/v6/PucFactory.php",
+    "plugin-update-checker/vendor/PucReadmeParser.php",
+}.issubset(build.FILES)
+
 with tempfile.TemporaryDirectory() as temporary:
     dist = Path(temporary)
     archive = dist / build.ARCHIVE.name
