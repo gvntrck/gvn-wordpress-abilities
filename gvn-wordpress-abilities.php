@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: GVN WordPress Abilities
- * Description: Expõe apenas a estrutura das tabelas WordPress ao MCP, sem ler registros nem executar SQL informado pelo usuário.
- * Version: 1.2.1
+ * Description: Habilidades MCP para consultar estruturas, ler arquivos de plugins e gerenciar páginas HTMLPress.
+ * Version: 1.4.1
  * Author: Giovani
  * Author URI: https://projetoalfa.org
  * Requires at least: 6.9
@@ -12,6 +12,9 @@
  */
 
 defined( 'ABSPATH' ) || exit;
+
+require_once __DIR__ . '/plugin-files.php';
+require_once __DIR__ . '/htmlpress.php';
 
 /**
  * List only tables belonging to the current site's prefix.
@@ -91,6 +94,7 @@ function gvn_wordpress_abilities_can_manage() {
  */
 function gvn_wordpress_abilities_catalog() {
 	return array(
+		'gvn-wordpress-abilities/manage-htmlpress' => gvn_wordpress_abilities_htmlpress_definition(),
 		'gvn-wordpress-abilities/list-tables' => array(
 			'label'            => __( 'Listar tabelas do site', 'gvn-wordpress-abilities' ),
 			'description'      => __( 'Lista nomes de tabelas do prefixo do site atual, sem consultar registros.', 'gvn-wordpress-abilities' ),
@@ -106,6 +110,22 @@ function gvn_wordpress_abilities_catalog() {
 				'required'   => array( 'table' ),
 			),
 			'execute_callback' => 'gvn_wordpress_abilities_describe',
+		),
+		'gvn-wordpress-abilities/read-plugin-file' => array(
+			'label'               => __( 'Ler arquivo de plugin', 'gvn-wordpress-abilities' ),
+			'description'         => __( 'Lê códigos e textos de qualquer plugin instalado, incluindo vendor e node_modules, sem executar ou editar. Retorna até 256 KiB por chamada; continue usando next_offset até ser null. Exige edit_plugins. Pode enviar informações sensíveis ao cliente MCP.', 'gvn-wordpress-abilities' ),
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'plugin' => array( 'type' => 'string', 'description' => __( 'Arquivo principal relativo à pasta de plugins, por exemplo: meu-plugin/meu-plugin.php.', 'gvn-wordpress-abilities' ) ),
+					'file'   => array( 'type' => 'string', 'description' => __( 'Arquivo a ler, relativo à pasta de plugins, por exemplo: meu-plugin/includes/example.php. Se omitido, lê o arquivo principal.', 'gvn-wordpress-abilities' ) ),
+					'offset' => array( 'type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => __( 'Deslocamento em bytes. Para continuar, use next_offset da resposta anterior.', 'gvn-wordpress-abilities' ) ),
+				),
+				'required'             => array( 'plugin' ),
+				'additionalProperties' => false,
+			),
+			'execute_callback'    => 'gvn_wordpress_abilities_read_plugin_file',
+			'permission_callback' => 'gvn_wordpress_abilities_can_read_plugin_files',
 		),
 	);
 }

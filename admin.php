@@ -11,7 +11,7 @@ add_action(
 	'admin_enqueue_scripts',
 	static function ( $hook ) {
 		if ( 'settings_page_gvn-wordpress-abilities' === $hook ) {
-			wp_enqueue_style( 'gvn-wordpress-abilities-admin', plugins_url( 'admin.css', __FILE__ ), array(), '1.2.1' );
+			wp_enqueue_style( 'gvn-wordpress-abilities-admin', plugins_url( 'admin.css', __FILE__ ), array(), '1.4.1' );
 		}
 	}
 );
@@ -82,7 +82,7 @@ function gvn_wordpress_abilities_admin_page() {
 	?>
 	<div class="wrap">
 		<h1><?php esc_html_e( 'GVN WordPress Abilities', 'gvn-wordpress-abilities' ); ?></h1>
-		<p><?php esc_html_e( 'Habilidades permitem que clientes MCP consultem informações do site. Este plugin expõe apenas a estrutura das tabelas, nunca seus registros.', 'gvn-wordpress-abilities' ); ?></p>
+		<p><?php esc_html_e( 'Habilidades permitem consultar estruturas, ler arquivos de plugins e criar ou editar páginas HTMLPress. Não editam arquivos nem executam SQL arbitrário. O HTMLPress publica novas páginas imediatamente. Use apenas clientes de confiança: arquivos podem conter segredos e o HTML pode executar JavaScript.', 'gvn-wordpress-abilities' ); ?></p>
 		<?php settings_errors(); ?>
 		<?php if ( ! function_exists( 'wp_register_ability' ) ) : ?>
 			<div class="notice notice-warning"><p><?php esc_html_e( 'A API de habilidades não está disponível. Use WordPress 6.9 ou superior para executar as habilidades.', 'gvn-wordpress-abilities' ); ?></p></div>

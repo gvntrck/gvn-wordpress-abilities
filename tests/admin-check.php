@@ -14,6 +14,7 @@ $settings   = array();
 $can_manage = true;
 $multisite  = false;
 $super      = false;
+$can_edit   = true;
 
 function add_action( $hook, $callback ) {
 	$GLOBALS['hooks'][ $hook ][] = $callback;
@@ -25,7 +26,7 @@ function get_option( $name, $default ) {
 	return $GLOBALS['options'][ $name ] ?? $default;
 }
 function current_user_can( $capability ) {
-	return $GLOBALS['can_manage'];
+	return 'edit_plugins' === $capability ? $GLOBALS['can_edit'] : $GLOBALS['can_manage'];
 }
 function is_multisite() {
 	return $GLOBALS['multisite'];
@@ -54,18 +55,19 @@ require dirname( __DIR__ ) . '/gvn-wordpress-abilities.php';
 
 $names = array_keys( gvn_wordpress_abilities_catalog() );
 run_hook( 'wp_abilities_api_init' );
-check( array_keys( $registered ) === $names, 'Both abilities must be enabled by default.' );
+check( array_keys( $registered ) === $names, 'All abilities must be enabled by default.' );
 foreach ( $registered as $args ) {
 	check( is_callable( $args['execute_callback'] ), 'Existing callbacks must remain valid.' );
-	check( call_user_func( $args['permission_callback'] ), 'Administrators must retain access.' );
+	$expected_access = 'gvn_wordpress_abilities_can_manage_htmlpress' !== $args['permission_callback'] || gvn_wordpress_abilities_htmlpress_available();
+	check( call_user_func( $args['permission_callback'] ) === $expected_access, 'Access must respect optional plugin dependencies.' );
 }
 
-foreach ( array( array( $names[0] ), $names, array() ) as $disabled ) {
+foreach ( array( array( $names[0] ), array( end( $names ) ), $names, array() ) as $disabled ) {
 	$options['gvn_wordpress_abilities_disabled'] = $disabled;
 	$registered = array();
 	run_hook( 'wp_abilities_api_init' );
 	check( array_keys( $registered ) === array_values( array_diff( $names, $disabled ) ), 'Disable/re-enable must affect registration.' );
-	check( count( gvn_wordpress_abilities_catalog() ) === 2, 'Disabled abilities must remain in the admin catalog.' );
+	check( array_keys( gvn_wordpress_abilities_catalog() ) === $names, 'Disabled abilities must remain in the admin catalog.' );
 }
 
 check( gvn_wordpress_abilities_sanitize_disabled( array( '', 'other/plugin', $names[0], $names[0], array() ) ) === array( $names[0] ), 'Ignore unknown, duplicate, and malformed values.' );
