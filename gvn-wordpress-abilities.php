@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
  *
  * @return array|WP_Error Table names or an error.
  */
-function sampachess_schema_tables() {
+function gvn_wordpress_abilities_tables() {
 	global $wpdb;
 	$tables = $wpdb->get_col(
 		$wpdb->prepare( 'SHOW FULL TABLES LIKE %s', $wpdb->esc_like( $wpdb->prefix ) . '%' )
@@ -36,9 +36,9 @@ function sampachess_schema_tables() {
  * @param array $input Ability input.
  * @return array|WP_Error Metadata or an error.
  */
-function sampachess_schema_describe( $input ) {
+function gvn_wordpress_abilities_describe( $input ) {
 	global $wpdb;
-	$tables = sampachess_schema_tables();
+	$tables = gvn_wordpress_abilities_tables();
 	if ( is_wp_error( $tables ) ) {
 		return $tables;
 	}
@@ -88,19 +88,19 @@ add_action(
 			),
 		);
 		wp_register_ability(
-			'sampachess-schema/list-tables',
+			'gvn-wordpress-abilities/list-tables',
 			array_merge(
 				$common,
 				array(
 					'label'            => 'Listar tabelas do site',
 					'description'      => 'Lista nomes de tabelas do prefixo do site atual, sem consultar registros.',
 					'input_schema'     => array( 'type' => 'object', 'properties' => new stdClass() ),
-					'execute_callback' => 'sampachess_schema_tables',
+					'execute_callback' => 'gvn_wordpress_abilities_tables',
 				)
 			)
 		);
 		wp_register_ability(
-			'sampachess-schema/describe-table',
+			'gvn-wordpress-abilities/describe-table',
 			array_merge(
 				$common,
 				array(
@@ -111,7 +111,7 @@ add_action(
 						'properties' => array( 'table' => array( 'type' => 'string', 'description' => 'Nome exato da tabela.' ) ),
 						'required'   => array( 'table' ),
 					),
-					'execute_callback' => 'sampachess_schema_describe',
+					'execute_callback' => 'gvn_wordpress_abilities_describe',
 				)
 			)
 		);
